@@ -6,7 +6,7 @@ var
   bodyParser = require('body-parser');
 
 var
-  responder = require('./http-responder');
+  responder = require('./lib/http-responder');
 
 var
   app = express(),

@@ -11,6 +11,7 @@ var
 var
   app = express(),
   port = process.env.PORT || 3000,
+  root = 'http://127.0.0.1:' + port,
   app = express(),
   db = {};
 
@@ -24,11 +25,18 @@ app
     next();
   });
 
+// Connect to an NeDB database
 db.movies = new Datastore({
   filename: path.join(__dirname, 'db', 'movies'),
   autoload: true
 });
+// Add an Index
+db.movies.ensureIndex({
+  fieldName: 'title',
+  unique: true
+});
 
+// Routes
 app
   .get('/', function (req, res) {
     res.send('The API is working');
@@ -37,14 +45,43 @@ app
     db.movies.find({}, res.locals.respond);
   })
   .post('/movies', function (req, res) {
+    if (!req.body.title) {
+      res.json(400, {
+        message: "A title is required."
+      });
+      return;
+    }
+
     db.movies.insert({
       title: req.body.title
-    }, res.locals.respond);
+    }, function (err, created) {
+      if (err) {
+        res.json(500, err);
+        return;
+      }
+
+      res.set('Location', root + '/movies/' + created._id);
+      res.json(201, created);
+    });
   })
   .get('/movies/:id', function (req, res) {
     db.movies.findOne({
       _id: req.params.id
-    }, res.locals.respond);
+    }, function (err, result) {
+      if (err) {
+        res.json(500, err);
+        return;
+      }
+
+      if (!result) {
+        res.json(404, {
+          message: 'Nothing found with the id: ' + req.params.id
+        });
+        return;
+      }
+
+      res.json(200, result);
+    });
   })
   .put('/movies/:id', function (req, res) {
     db.movies.update({
@@ -53,7 +90,7 @@ app
       req.body,
       function (err, num) {
         res.locals.respond(err, {
-          success: num + ' record(s) updated'
+          message: num + ' record(s) updated'
         });
       });
   })
@@ -62,9 +99,20 @@ app
         _id: req.params.id
       },
       function (err, num) {
-        res.locals.respond(err, {
-          success: num + ' record(s) deleted'
-        });
+        if (err) {
+          res.json(500, err);
+          return;
+        }
+
+        if (num === 0) {
+          res.json(404, {
+            message: 'Nothing found with the id: ' + req.params.id
+          });
+          return;
+        }
+
+        res.set('Link', root + '/movies; rel="collection"');
+        res.send(204);
       });
   });
 
